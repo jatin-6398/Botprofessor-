@@ -46,7 +46,7 @@ def webhook():
         bot.send_message(chat_id=chat_id, text="📊 Send 100–300 PRNG numbers (like: 3 5 2 8 1...)")
     elif all(c.isdigit() or c.isspace() for c in message):
         numbers = list(map(int, message.strip().split()))
-        if 100 <= len(numbers) <= 300:
+        if 10 <= len(numbers) <= 300:
             session_data["history"] = numbers
             bot.send_message(chat_id=chat_id, text=f"✅ Received {len(numbers)} numbers.\nNow send feedback like ✅ or ❌ after prediction.")
         else:
