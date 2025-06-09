@@ -1,29 +1,25 @@
 import os
-import time
+import time                    # ⬅️ time import karo
 import telebot
 from dotenv import load_dotenv
 
-# .env file se BOT_TOKEN uthao
-load_dotenv()
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+load_dotenv()                  # .env se token load
 
-# Bot instance banao
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 bot = telebot.TeleBot(BOT_TOKEN)
 
-# IMPORTANT: Webhook hatao agar pehle se koi chalu hai
-bot.delete_webhook()
-time.sleep(1)  # Thoda ruk jao 1 second
+# 🔥 Add these lines to clear any existing webhook/getUpdates conflict
+bot.delete_webhook()          
+time.sleep(1)                  # thoda wait karo taaki webhook delete ho jaye
 
-# Start command ka response
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     bot.reply_to(message, "👋 Hello! This is your 24/7 working prediction bot 🔮")
 
-# Har message ka reply
 @bot.message_handler(func=lambda m: True)
 def echo_all(message):
     bot.reply_to(message, f"You said: {message.text} 😎")
 
-# Bot chalu karo
-print("🤖 Bot is running... Ready to respond!")
-bot.polling()
+print("✅ Bot is running...")
+
+bot.polling()                  # ab conflict error nahi aayega
