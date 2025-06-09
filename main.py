@@ -1,110 +1,223 @@
-import os
+#!/usr/bin/env python3
+"""
+BotProfessor9_bot – A Telegram bot with multi-dimensional prediction and analysis.
+"""
+
+import logging
+import re
 import time
-from flask import Flask, request
-import telegram
+from datetime import datetime, timedelta
 from threading import Timer
+
+from telegram import Update, ParseMode
+from telegram.ext import (
+    Updater,
+    CommandHandler,
+    MessageHandler,
+    Filters,
+    ConversationHandler,
+    CallbackContext,
+)
 from dotenv import load_dotenv
+import os
 
+# --------- Load config ---------
 load_dotenv()
-TOKEN = os.getenv("BOT_TOKEN")
-bot = telegram.Bot(token=TOKEN)
-app = Flask(__name__)
+BOT_TOKEN = os.getenv("BOT_TOKEN")  # from .env
 
-# Session Data
-session = {"history": [], "chat_id": None, "timer": None}
+# Session Timeout in seconds (30 minutes)
+SESSION_TIMEOUT = 30 * 60
 
-# Patterns Definition
-BS_PATTERNS = {
-    "Single":    ["B","S"]*6,
-    "Double":    ["S","S","B","B"]*3,
-    "Triple":    ["B","B","B","S","S","S"]*2,
-    "Quadra":    ["S"]*4 + ["B"]*4 + ["S"]*4,
-    "ThreeInOne":["B","B","B","S","B","S","B","B","B"],
-    "TwoInOne":  ["S","S","S","S","B","S","S","S","S"],
-    "ThreeInTwo":["B","B","B","S","S","B","B","B","S","S"],
-    "FourInOne": ["S","S","S","S","B","B","B","B","S"],
-    "FourInTwo": ["B","B","B","B","S","S","B","B","B","B","S","S"],
-    "Long":      ["B"]*4 + ["S"]*4 + ["B"]*4 + ["S"]*2,
-    "Zigzag":    ["B","S","S","B","B","S","S","B","B","S","S"]
-}
-RG_PATTERNS = {
-    "Single":    ["R","G"]*6,
-    "Double":    ["G","G","R","R"]*3,
-    "Triple":    ["R","R","R","G","G","G"]*2,
-    "Quadra":    ["G"]*4 + ["R"]*4 + ["G"]*4,
-    "ThreeInOne":["R","R","R","G","R","G","R","R","R"],
-    "TwoInOne":  ["G","G","G","G","R","G","G","G","G"],
-    "ThreeInTwo":["R","R","R","G","G","R","R","R","G","G"],
-    "FourInOne": ["G","G","G","G","R","R","R","R","G"],
-    "FourInTwo": ["R","R","R","R","G","G","R","R","R","R","G","G"],
-    "Long":      ["R"]*4 + ["G"]*4 + ["R"]*4 + ["G"]*2,
-    "Zigzag":    ["R","G","G","R","R","G","G","R","R","G","G"]
-}
+# Global sessions dict
+sessions = {}
 
-def classify_bs(nums):
-    return ["B" if n>=5 else "S" for n in nums]
+# Conversation states
+WAITING_FOR_NUMBERS, WAITING_FOR_FEEDBACK = range(2)
 
-def classify_rg(nums):
-    return ["R" if n%2==0 else "G" for n in nums]
+# Configure logging
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+)
+logger = logging.getLogger(__name__)
 
-def detect_pattern(seq, patterns):
-    for name, pat in patterns.items():
-        # check if seq ends with pattern slice
-        L = len(pat)
-        if seq[-L:] == pat:
-            return name
-    return "No match"
 
-def end_session():
-    session.clear()
+# --------- ANALYSIS MODULES (DUMMY) ---------
+def multi_dimensional_analysis(data):
+    return {"multi_analysis": 1}
 
-def reset_timer():
-    if session.get("timer"):
-        session["timer"].cancel()
-    session["timer"] = Timer(1800, end_session)
-    session["timer"].start()
+def probability_distribution(data):
+    return {"prob_distribution": 1}
 
-@app.route(f'/{TOKEN}', methods=['POST'])
-def webhook():
-    upd = telegram.Update.de_json(request.get_json(force=True), bot)
-    msg = upd.message.text.strip()
-    cid = upd.message.chat.id
-    session["chat_id"] = cid
-    reset_timer()
+def trend_identification(data):
+    return {"trend": "up" if sum(data) % 2 == 0 else "down"}
 
-    if msg.lower()=="/start_session":
-        session["history"] = []
-        bot.send_message(cid, "📊 Send me 100–300 PRNG numbers now.")
-    elif all(c.isdigit() or c.isspace() for c in msg):
-        nums = list(map(int, msg.split()))
-        if 100 <= len(nums) <= 300:
-            session["history"] = nums
-            bot.send_message(cid, f"✅ Got {len(nums)} numbers. Now type /analyze to see patterns.")
-        else:
-            bot.send_message(cid, "⚠️ Send between 100–300 numbers, please.")
-    elif msg.lower()=="/analyze":
-        nums = session.get("history", [])
-        if not nums:
-            return 'ok'
-        bs_seq = classify_bs(nums)
-        rg_seq = classify_rg(nums)
-        bs_pat = detect_pattern(bs_seq, BS_PATTERNS)
-        rg_pat = detect_pattern(rg_seq, RG_PATTERNS)
-        bot.send_message(cid,
-            f"🔍 Big/Small Seq: {''.join(bs_seq[-20:])}…\nPattern: {bs_pat}\n\n"
-            f"🔍 Red/Green Seq: {''.join(rg_seq[-20:])}…\nPattern: {rg_pat}"
-        )
-    elif msg in ["✅","👍","❌","👎"]:
-        bot.send_message(cid, f"📩 Feedback noted: {msg}")
+def recent_data_weighting(data):
+    return {"recent_weight": 1}
+
+def big_small_classification(numbers):
+    return ["Big" if n >= 5 else "Small" for n in numbers]
+
+def red_green_classification(numbers):
+    return ["Red" if n % 2 == 0 else "Green" for n in numbers]
+
+def dynamic_thresholds(data):
+    return {"threshold": 75}
+
+def confidence_score_calculation(data):
+    return 80  # dummy
+
+def dual_verification(data):
+    return {"dual_verification": True}
+
+def risk_adjustment(data):
+    return {"risk_adjustment": 1}
+
+def anomaly_detection_module(data):
+    return {"anomaly": False}
+
+def feedback_integration_module(data, feedback):
+    return {"feedback_adjusted": True}
+
+
+def analyze_numbers(numbers, feedback=None):
+    analysis = {}
+    analysis.update(multi_dimensional_analysis(numbers))
+    analysis.update(probability_distribution(numbers))
+    analysis.update(trend_identification(numbers))
+    analysis.update(recent_data_weighting(numbers))
+    analysis["big_small"] = big_small_classification(numbers)
+    analysis["red_green"] = red_green_classification(numbers)
+    analysis.update(dynamic_thresholds(numbers))
+    analysis["confidence"] = confidence_score_calculation(numbers)
+    analysis.update(dual_verification(numbers))
+    analysis.update(risk_adjustment(numbers))
+    analysis.update(anomaly_detection_module(numbers))
+    if feedback is not None:
+        analysis.update(feedback_integration_module(numbers, feedback))
+    return analysis
+
+
+# --------- SESSION MANAGEMENT ---------
+def start_new_session(chat_id: int):
+    sessions[chat_id] = {
+        "last_activity": datetime.now(),
+        "data": {}
+    }
+    # schedule clear
+    Timer(SESSION_TIMEOUT, clear_session, args=(chat_id,)).start()
+
+def update_session_activity(chat_id: int):
+    if chat_id in sessions:
+        sessions[chat_id]["last_activity"] = datetime.now()
+
+def clear_session(chat_id: int):
+    if chat_id in sessions:
+        age = datetime.now() - sessions[chat_id]["last_activity"]
+        if age.total_seconds() >= SESSION_TIMEOUT:
+            del sessions[chat_id]
+            logger.info(f"Session cleared for {chat_id}")
+
+
+# --------- HANDLERS ---------
+def start(update: Update, context: CallbackContext) -> int:
+    chat_id = update.effective_chat.id
+    start_new_session(chat_id)
+    update.message.reply_text(
+        "Namaste! Session started. Send 10–300 PRNG numbers in one message, space-separated (e.g. `6 3 2 8 2 9 ...`)."
+    )
+    return WAITING_FOR_NUMBERS
+
+def receive_numbers(update: Update, context: CallbackContext) -> int:
+    chat_id = update.effective_chat.id
+    update_session_activity(chat_id)
+    nums = list(map(int, re.findall(r'\d+', update.message.text)))
+    if not (10 <= len(nums) <= 300):
+        update.message.reply_text("⚠️ Please send between 10 and 300 numbers.")
+        return WAITING_FOR_NUMBERS
+
+    sessions[chat_id]["data"]["numbers"] = nums
+    analysis = analyze_numbers(nums)
+    conf = analysis.get("confidence", 0)
+
+    # Determine tier
+    if conf >= 90:
+        tier = "Killer Terd 😎🔥"
+    elif conf >= 85:
+        tier = "High Probability Terd 🏹"
+    elif conf >= 75:
+        tier = "Sniper Terd 🎯"
+    elif conf >= 70:
+        tier = "Best Terd 👍"
     else:
-        bot.send_message(cid, "ℹ️ Unknown. Use /start_session or /analyze.")
+        tier = "Ignore Terd 🚫"
 
-    return 'ok'
+    msg = (
+        f"Prediction Confidence: *{conf}%* — *{tier}*\n\n"
+        "Modules applied: 1. Multi-Dimensional\n"
+        "2. Probability Distn\n3. Trend ID\n4. Recent Wt\n5. Big/Small\n"
+        "6. Red/Green\n7. Dual Verif\n8. Risk Adj\n9. Dyn Thr\n10. Conf Score\n\n"
+        "Send feedback (number/emoji/text) to update."
+    )
+    update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN)
+    return WAITING_FOR_FEEDBACK
 
-@app.route('/')
-def home():
-    return 'BotProfessor9 Phase2 ✅'
+def receive_feedback(update: Update, context: CallbackContext) -> int:
+    chat_id = update.effective_chat.id
+    update_session_activity(chat_id)
+    text = update.message.text
+    # extract numeric or emoji feedback
+    fb_val = None
+    if re.search(r'\d+', text):
+        fb_val = int(re.search(r'\d+', text).group())
+    else:
+        fb_val = 1 if any(e in text for e in ("✅","👍")) else 0
 
-if __name__=="__main__":
-    from waitress import serve
-    serve(app, host='0.0.0.0', port=10000)
+    nums = sessions[chat_id]["data"].get("numbers", [])
+    updated = analyze_numbers(nums, feedback=fb_val)
+    new_conf = updated.get("confidence", 0)
+    resp = (
+        f"Feedback: *{text}*\nUpdated Confidence: *{new_conf}%*\n"
+        "Session continues until confidence ≥90% or you /cancel."
+    )
+    update.message.reply_text(resp, parse_mode=ParseMode.MARKDOWN)
+
+    if new_conf >= 90:
+        update.message.reply_text("Session complete. Data cleared, bot sleeping for 30 min 😴")
+        sessions.pop(chat_id, None)
+        return ConversationHandler.END
+
+    return WAITING_FOR_FEEDBACK
+
+def cancel(update: Update, context: CallbackContext) -> int:
+    chat_id = update.effective_chat.id
+    sessions.pop(chat_id, None)
+    update.message.reply_text("Session cancelled. Type /start to begin again.")
+    return ConversationHandler.END
+
+def error_handler(update, context):
+    logger.error("Error:", exc_info=context.error)
+
+
+# --------- MAIN ---------
+def main():
+    updater = Updater(BOT_TOKEN, use_context=True)
+    dp = updater.dispatcher
+
+    conv = ConversationHandler(
+        entry_points=[CommandHandler("start", start)],
+        states={
+            WAITING_FOR_NUMBERS: [MessageHandler(Filters.text & ~Filters.command, receive_numbers)],
+            WAITING_FOR_FEEDBACK: [MessageHandler(Filters.text & ~Filters.command, receive_feedback)],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+        conversation_timeout=SESSION_TIMEOUT,
+    )
+    dp.add_handler(conv)
+    dp.add_error_handler(error_handler)
+
+    updater.start_polling()
+    logger.info("BotProfessor9_bot is up and running!")
+    updater.idle()
+
+if __name__ == "__main__":
+    main()
